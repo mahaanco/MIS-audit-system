@@ -208,7 +208,10 @@ def preprocess_mis(df):
 
     header_row = detect_header_row(df)
 
-    df.columns = df.iloc[header_row]
+    df.columns = [
+    str(col).strip()
+    for col in df.iloc[header_row].values
+]
 
     df = df[(header_row + 1):]
 

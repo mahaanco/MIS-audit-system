@@ -3,18 +3,19 @@ import pandas as pd
 import plotly.express as px
 
 from utils import read_mis_file
-from yearly_analysis import YearlyAnalysis
+from variance_analysis import VarianceAnalysis
 from queries import Queries
 from report_generator import ReportGenerator
 
 st.set_page_config(
-    page_title="Yearly MIS Audit System",
+    page_title="Monthly MIS Variance System",
     layout="wide"
 )
 
-st.title("📊 Yearly MIS Audit System")
+st.title("📊 Monthly MIS Variance System")
 
 threshold = st.slider(
+
     "Variance Threshold %",
     1,
     100,
@@ -30,9 +31,9 @@ uploaded_files = st.file_uploader(
 
 if uploaded_files:
 
-    monthly_data = []
+    monthly_files = []
 
-    # Read all files
+    # Read all uploaded files
     for file in uploaded_files:
 
         df = read_mis_file(file)
@@ -44,41 +45,74 @@ if uploaded_files:
                 .split(".")[0]
             )
 
-            df["Month"] = month_name
+            monthly_files.append({
 
-            monthly_data.append(df)
+                "month": month_name,
+                "df": df
+            })
 
-    # Combine all months
-    full_year_df = pd.concat(
+    # Sort files alphabetically
+    monthly_files = sorted(
 
-        monthly_data,
+        monthly_files,
+
+        key=lambda x: x["month"]
+    )
+
+    all_variance = []
+
+    # Compare month by month
+    for i in range(
+
+        1,
+        len(monthly_files)
+    ):
+
+        previous_month = monthly_files[i - 1]
+        current_month = monthly_files[i]
+
+        variance = VarianceAnalysis(
+
+            previous_month["df"],
+            current_month["df"],
+            threshold
+        )
+
+        variance_df = variance.analyze()
+
+        variance_df["Comparison"] = (
+
+            previous_month["month"]
+            + " vs "
+            + current_month["month"]
+        )
+
+        all_variance.append(
+            variance_df
+        )
+
+    # Combine all variance
+    final_variance_df = pd.concat(
+
+        all_variance,
         ignore_index=True
     )
 
-    st.subheader("Combined Yearly MIS")
+    # ---------------- DISPLAY ---------------- #
+
+    st.subheader(
+        "Monthly Variance Analysis"
+    )
 
     st.dataframe(
-        full_year_df.head(50)
+        final_variance_df
     )
 
-    # Yearly Analysis
-    analysis = YearlyAnalysis(
+    # ---------------- CHART ---------------- #
 
-        full_year_df,
-        threshold
-    )
+    chart_df = final_variance_df[
 
-    variance_df = analysis.analyze()
-
-    st.subheader("Yearly Variance Analysis")
-
-    st.dataframe(variance_df)
-
-    # ---------------- CHARTS ---------------- #
-
-    chart_df = variance_df[
-
-        variance_df["Status"]
+        final_variance_df["Status"]
         == "High Variance"
     ]
 
@@ -86,41 +120,22 @@ if uploaded_files:
 
     if not chart_df.empty:
 
-        st.subheader("Top Variance Accounts")
-
-        amount_chart = px.bar(
+        chart = px.bar(
 
             chart_df,
 
             x="GL Name",
-            y="Variance Amount",
+            y="Variance",
 
-            color="Status",
+            color="Comparison",
 
-            text="Variance Amount",
+            title="Monthly Variance Comparison",
 
-            title="Highest Variance Accounts"
+            text="Variance"
         )
 
         st.plotly_chart(
-            amount_chart,
-            use_container_width=True
-        )
-
-        trend_chart = px.line(
-
-            full_year_df,
-
-            x="Month",
-            y=full_year_df.columns[-2],
-
-            color="GL Name",
-
-            title="Monthly Trend Analysis"
-        )
-
-        st.plotly_chart(
-            trend_chart,
+            chart,
             use_container_width=True
         )
 
@@ -129,29 +144,32 @@ if uploaded_files:
     query_engine = Queries()
 
     queries_df = query_engine.generate(
-        variance_df
+        final_variance_df
     )
 
-    st.subheader("Possible Client Queries")
+    st.subheader(
+        "Possible Client Queries"
+    )
 
-    st.dataframe(queries_df)
+    st.dataframe(
+        queries_df
+    )
 
-    # ---------------- DOWNLOAD REPORT ---------------- #
+    # ---------------- DOWNLOAD ---------------- #
 
     report = ReportGenerator.generate(
 
-        variance_df,
-        queries_df,
-        full_year_df
+        final_variance_df,
+        queries_df
     )
 
     st.download_button(
 
-        label="Download Full Year Audit Report",
+        label="Download MIS Variance Report",
 
         data=report,
 
-        file_name="Yearly_MIS_Audit_Report.xlsx",
+        file_name="Monthly_MIS_Variance_Report.xlsx",
 
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )

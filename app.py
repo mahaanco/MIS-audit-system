@@ -6,14 +6,15 @@ from utils import (
     read_file,
     preprocess_mis,
 )
+from trend_analysis import TrendAnalyzer
+
+from queries import QueryPrioritizer
 
 from variance_analysis import (
     VarianceAnalyzer
 )
 
-from queries import (
-    generate_client_queries
-)
+
 
 
 st.set_page_config(

@@ -105,6 +105,48 @@ if uploaded_file:
         month_cols = sorted(month_cols)
 
         # =========================================
+        # PERIOD SELECTION
+        # =========================================
+
+        st.sidebar.subheader(
+            "Variance Analysis Period"
+        )
+
+        start_month = st.sidebar.selectbox(
+            "Select Start Month",
+            month_cols,
+            index=0
+        )
+
+        end_month = st.sidebar.selectbox(
+            "Select End Month",
+            month_cols,
+            index=len(month_cols) - 1
+        )
+
+        start_index = month_cols.index(
+            start_month
+        )
+
+        end_index = month_cols.index(
+            end_month
+        )
+
+        # Validation
+        if start_index >= end_index:
+
+            st.error(
+                "End month must be after start month."
+            )
+
+            st.stop()
+
+        # Selected months
+        selected_months = month_cols[
+            start_index:end_index + 1
+        ]
+
+        # =========================================
         # SUCCESS MESSAGE
         # =========================================
 
@@ -117,13 +159,13 @@ if uploaded_file:
         # =========================================
 
         st.subheader(
-            "Detected Months"
+            "Selected Analysis Period"
         )
 
-        st.write(month_cols)
+        st.write(selected_months)
 
         # =========================================
-        # SHOW PROCESSED DATA
+        # SHOW PROCESSED MIS
         # =========================================
 
         with st.expander(
@@ -156,12 +198,12 @@ if uploaded_file:
         )
 
         for i in range(
-            len(month_cols) - 1
+            len(selected_months) - 1
         ):
 
-            prev_month = month_cols[i]
+            prev_month = selected_months[i]
 
-            curr_month = month_cols[i + 1]
+            curr_month = selected_months[i + 1]
 
             # =========================================
             # CALCULATE VARIANCE

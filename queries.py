@@ -1,49 +1,46 @@
 import pandas as pd
 
 
-def generate_client_queries(
-    df,
-    prev_month,
-    curr_month
-):
+def generate_client_queries(df):
 
     queries = []
 
-    for _, row in df.iterrows():
+    high_variance = df[
+        df["Status"] == "High Variance"
+    ]
 
-        prev_value = row[prev_month]
-        curr_value = row[curr_month]
+    for _, row in high_variance.iterrows():
 
-        if prev_value == 0 and curr_value > 0:
+        if (
+            row["Previous Month"] == 0
+            and row["Current Month"] > 0
+        ):
             continue
 
-        if prev_value == 0 and curr_value == 0:
+        if (
+            row["Previous Month"] == 0
+            and row["Current Month"] == 0
+        ):
             continue
 
-        if pd.isna(row["Variance %"]):
-            continue
+        if row["Variance"] > 0:
 
-        if abs(row["Variance %"]) < 20:
-            continue
-
-        if curr_value > prev_value:
-
-            q = (
-                f"Why did {row['GL']} increase by "
-                f"{round(row['Variance %'], 2)}% "
-                f"from {prev_month} to {curr_month}?"
+            query = (
+                f"Why did {row['GL Name']} "
+                f"increase by "
+                f"{row['Variance %']}%?"
             )
 
         else:
 
-            q = (
-                f"Why did {row['GL']} decrease by "
-                f"{abs(round(row['Variance %'], 2))}% "
-                f"from {prev_month} to {curr_month}?"
+            query = (
+                f"Why did {row['GL Name']} "
+                f"decrease by "
+                f"{abs(row['Variance %'])}%?"
             )
 
-        queries.append(q)
+        queries.append(query)
 
     return pd.DataFrame({
-        "Client Query": queries
+        "AI Queries": queries
     })

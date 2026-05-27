@@ -1,8 +1,11 @@
 import pandas as pd
-import numpy as np
 
 
-def generate_client_queries(df, prev_month, curr_month):
+def generate_client_queries(
+    df,
+    prev_month,
+    curr_month
+):
 
     queries = []
 
@@ -11,14 +14,10 @@ def generate_client_queries(df, prev_month, curr_month):
         prev_value = row[prev_month]
         curr_value = row[curr_month]
 
-        if (
-            prev_value == 0 and curr_value > 0
-        ):
+        if prev_value == 0 and curr_value > 0:
             continue
 
-        if (
-            prev_value == 0 and curr_value == 0
-        ):
+        if prev_value == 0 and curr_value == 0:
             continue
 
         if pd.isna(row["Variance %"]):
@@ -45,4 +44,6 @@ def generate_client_queries(df, prev_month, curr_month):
 
         queries.append(q)
 
-    return pd.DataFrame({"Client Query": queries})
+    return pd.DataFrame({
+        "Client Query": queries
+    })

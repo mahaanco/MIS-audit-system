@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-class VarianceAnalysis::
+class VarianceAnalysis:
 
     def __init__(
         self,

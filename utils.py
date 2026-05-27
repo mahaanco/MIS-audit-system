@@ -96,18 +96,26 @@ def clean_dataframe(df):
     df = df.fillna("")
 
     return df
-
-
 def normalize_columns(df):
 
-    df.columns = (
-        df.columns.astype(str)
-        .str.strip()
-        .str.lower()
-        .str.replace(r"\n", " ", regex=True)
-    )
+    cleaned_cols = []
+
+    for col in df.columns:
+
+        col = str(col)
+
+        col = col.strip().lower()
+
+        col = col.replace("\n", " ")
+
+        cleaned_cols.append(col)
+
+    df.columns = cleaned_cols
 
     return df
+
+
+
 
 
 def detect_ledger_column(df):

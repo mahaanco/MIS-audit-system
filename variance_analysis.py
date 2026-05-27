@@ -1,92 +1,55 @@
 import pandas as pd
 import numpy as np
 
-class VarianceAnalysis:
 
-    def __init__(
-        self,
-        full_year_df,
-        threshold
-    ):
+class VarianceAnalyzer:
 
-        self.df = full_year_df
+    def __init__(self, threshold=20):
+
         self.threshold = threshold
 
-    def analyze(self):
+    def calculate_variance(self, prev_df, curr_df, prev_month, curr_month):
 
-        amount_col = self.df.columns[-2]
+        merged = pd.merge(
+            prev_df,
+            curr_df,
+            on="GL",
+            how="outer",
+            suffixes=("_prev", "_curr")
+        ).fillna(0)
 
-        # Clean amount
-        self.df[amount_col] = (
+        merged.rename(
+            columns={
+                "Amount_prev": prev_month,
+                "Amount_curr": curr_month,
+            },
+            inplace=True,
+        )
 
-            self.df[amount_col]
-            .astype(str)
-            .str.replace(
-                r"[^\d\.-]",
-                "",
-                regex=True
+        merged["Variance Amount"] = (
+            merged[curr_month] - merged[prev_month]
+        )
+
+        merged["Variance %"] = np.where(
+            (merged[prev_month] == 0) &
+            (merged[curr_month] == 0),
+            0,
+
+            np.where(
+                merged[prev_month] == 0,
+                np.nan,
+
+                (
+                    (merged[curr_month] - merged[prev_month])
+                    / merged[prev_month]
+                ) * 100
             )
         )
 
-        self.df[amount_col] = pd.to_numeric(
-
-            self.df[amount_col],
-            errors="coerce"
-
-        ).fillna(0)
-
-        # Remove invalid rows
-        self.df = self.df[
-
-            self.df["GL Name"]
-            .notna()
-        ]
-
-        # Group by GL
-        summary = self.df.groupby(
-
-            "GL Name"
-
-        )[amount_col].agg(
-
-            ["min", "max", "mean", "sum"]
-
-        ).reset_index()
-
-        summary["Variance Amount"] = (
-
-            summary["max"]
-            - summary["min"]
-        )
-
-        summary["Variance %"] = np.where(
-
-            summary["mean"] == 0,
-
-            0,
-
-            (
-                summary["Variance Amount"]
-                / abs(summary["mean"])
-            ) * 100
-        )
-
-        summary["Status"] = np.where(
-
-            abs(summary["Variance %"])
-            > self.threshold,
-
+        merged["Variance Type"] = np.where(
+            merged["Variance %"].abs() >= self.threshold,
             "High Variance",
-
             "Normal"
         )
 
-        summary = summary.rename(columns={
-
-            "sum": "Year Total",
-            "mean": "Average Monthly Value",
-            "min": "Minimum",
-            "max": "Maximum"
-        })
-
-        return summary
+        return merged

@@ -6,41 +6,51 @@ def read_file(uploaded_file):
 
     filename = uploaded_file.name.lower()
 
-    if filename.endswith(".xlsx"):
+    try:
 
-        return pd.read_excel(
-            uploaded_file,
-            header=None,
-            engine="openpyxl"
-        )
+        if filename.endswith(".xlsx"):
 
-    elif filename.endswith(".xls"):
+            df = pd.read_excel(
+                uploaded_file,
+                header=None,
+                engine="openpyxl"
+            )
 
-        return pd.read_excel(
-            uploaded_file,
-            header=None,
-            engine="xlrd"
-        )
+        elif filename.endswith(".xls"):
 
-    elif filename.endswith(".xlsb"):
+            df = pd.read_excel(
+                uploaded_file,
+                header=None,
+                engine="xlrd"
+            )
 
-        return pd.read_excel(
-            uploaded_file,
-            header=None,
-            engine="pyxlsb"
-        )
+        elif filename.endswith(".xlsb"):
 
-    elif filename.endswith(".csv"):
+            df = pd.read_excel(
+                uploaded_file,
+                header=None,
+                engine="pyxlsb"
+            )
 
-        return pd.read_csv(
-            uploaded_file,
-            header=None
-        )
+        elif filename.endswith(".csv"):
 
-    else:
+            df = pd.read_csv(
+                uploaded_file,
+                header=None
+            )
+
+        else:
+
+            raise Exception(
+                "Unsupported file format."
+            )
+
+        return df
+
+    except Exception as e:
 
         raise Exception(
-            "Unsupported file format."
+            f"Error reading file: {e}"
         )
 
 
@@ -48,10 +58,13 @@ def clean_dataframe(df):
 
     df = df.copy()
 
+    # Remove blank rows
     df = df.dropna(how="all")
 
+    # Remove blank columns
     df = df.dropna(axis=1, how="all")
 
+    # Fill NA
     df = df.fillna("")
 
     return df
@@ -69,8 +82,11 @@ def normalize_columns(df):
 
         col = col.strip().lower()
 
+        col = col.replace("\n", " ")
+
         col = re.sub(r"\s+", " ", col)
 
+        # Handle duplicate columns
         if col in seen:
 
             seen[col] += 1
@@ -121,6 +137,7 @@ def is_invalid_row(gl):
     ):
         return True
 
+    # Numeric-only rows
     if re.fullmatch(
         r"[\d\.\,\-]+",
         gl
@@ -130,15 +147,106 @@ def is_invalid_row(gl):
     return False
 
 
+def detect_ledger_column(df):
+
+    possible_columns = [
+        "gl name",
+        "ledger",
+        "ledger name",
+        "particulars",
+        "particular",
+        "account name",
+    ]
+
+    for col in df.columns:
+
+        if str(col).lower() in possible_columns:
+
+            return col
+
+    raise Exception(
+        "Ledger column not found."
+    )
+
+
+def detect_month_and_drcr_columns(df):
+
+    month_data = {}
+
+    for col in df.columns:
+
+        col_str = str(col).lower()
+
+        # Remove timestamp
+        clean_col = (
+            col_str
+            .split(" ")[0]
+            .strip()
+        )
+
+        # Detect DR columns
+        if (
+            "debit" in clean_col
+            or clean_col.endswith("dr")
+        ):
+
+            month_name = (
+                clean_col
+                .replace("debit", "")
+                .replace("dr", "")
+                .strip()
+            )
+
+            if month_name not in month_data:
+
+                month_data[month_name] = {}
+
+            month_data[month_name]["debit"] = col
+
+        # Detect CR columns
+        elif (
+            "credit" in clean_col
+            or clean_col.endswith("cr")
+        ):
+
+            month_name = (
+                clean_col
+                .replace("credit", "")
+                .replace("cr", "")
+                .strip()
+            )
+
+            if month_name not in month_data:
+
+                month_data[month_name] = {}
+
+            month_data[month_name]["credit"] = col
+
+        # Detect single amount columns
+        elif (
+            "-" in clean_col
+            or "/" in clean_col
+            or "202" in clean_col
+        ):
+
+            if clean_col not in month_data:
+
+                month_data[clean_col] = {}
+
+            month_data[clean_col]["amount"] = col
+
+    return month_data
+
+
 def preprocess_mis(df):
 
     # Clean dataframe
     df = clean_dataframe(df)
 
-    # Header row in your MIS
+    # Fixed header row
     header_row = 3
 
-    # Set headers
+    # Assign headers
     df.columns = [
         str(col).strip()
         for col in df.iloc[header_row]
@@ -153,40 +261,11 @@ def preprocess_mis(df):
     # Normalize columns
     df = normalize_columns(df)
 
-    # Ledger column
-    ledger_col = "gl name"
+    # Detect ledger column
+    ledger_col = detect_ledger_column(df)
 
-    # Detect month columns
-    month_cols = []
-
-    month_mapping = {}
-
-    for col in df.columns:
-
-        col_str = str(col).lower()
-
-        if (
-            "-" in col_str
-            or "/" in col_str
-            or "202" in col_str
-        ):
-
-            clean_col = (
-                str(col)
-                .split(" ")[0]
-                .strip()
-            )
-
-            month_cols.append(clean_col)
-
-            month_mapping[
-                clean_col
-            ] = col
-
-    # Remove duplicates
-    month_cols = list(
-        dict.fromkeys(month_cols)
-    )
+    # Detect month structures
+    month_data = detect_month_and_drcr_columns(df)
 
     # Create processed dataframe
     processed = pd.DataFrame()
@@ -204,27 +283,60 @@ def preprocess_mis(df):
         )
     ]
 
-    # Add month columns
-    for month in month_cols:
+    final_months = []
 
-        original_col = month_mapping[
-            month
-        ]
+    # Process month columns
+    for month, cols in month_data.items():
 
-        col_data = df[original_col]
-
-        if isinstance(
-            col_data,
-            pd.DataFrame
+        # DR/CR format
+        if (
+            "debit" in cols
+            or "credit" in cols
         ):
 
-            col_data = col_data.iloc[:, 0]
+            debit_values = 0
 
-        processed[month] = (
-            clean_amount_column(
-                col_data
+            credit_values = 0
+
+            if "debit" in cols:
+
+                debit_col = cols["debit"]
+
+                debit_values = (
+                    clean_amount_column(
+                        df[debit_col]
+                    )
+                )
+
+            if "credit" in cols:
+
+                credit_col = cols["credit"]
+
+                credit_values = (
+                    clean_amount_column(
+                        df[credit_col]
+                    )
+                )
+
+            processed[month] = (
+                debit_values
+                - credit_values
             )
-        )
+
+            final_months.append(month)
+
+        # Single amount format
+        elif "amount" in cols:
+
+            amount_col = cols["amount"]
+
+            processed[month] = (
+                clean_amount_column(
+                    df[amount_col]
+                )
+            )
+
+            final_months.append(month)
 
     # Remove blank GLs
     processed = processed[
@@ -244,4 +356,4 @@ def preprocess_mis(df):
         .sum(numeric_only=True)
     )
 
-    return processed, month_cols
+    return processed, final_months

@@ -1,52 +1,48 @@
-from io import BytesIO
 import pandas as pd
+from io import BytesIO
 
-class ReportGenerator:
 
-    @staticmethod
-    def generate(
+def generate_excel_report(all_results, all_queries):
 
-        variance_df,
-        queries_df,
-        full_year_df
-    ):
+    output = BytesIO()
 
-        output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
 
-        with pd.ExcelWriter(
+        workbook = writer.book
 
-            output,
-            engine="openpyxl"
+        header_format = workbook.add_format({
+            "bold": True,
+            "bg_color": "#D9EAD3",
+            "border": 1
+        })
 
-        ) as writer:
+        for month_pair, df in all_results.items():
 
-            variance_df.to_excel(
+            sheet_name = month_pair[:31]
 
+            df.to_excel(
                 writer,
-
-                sheet_name="Yearly Variance",
-
+                sheet_name=sheet_name,
                 index=False
             )
 
-            queries_df.to_excel(
+            worksheet = writer.sheets[sheet_name]
 
+            for col_num, value in enumerate(df.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+
+            worksheet.set_column(0, len(df.columns), 20)
+
+        for month_pair, query_df in all_queries.items():
+
+            sheet_name = f"Queries_{month_pair}"[:31]
+
+            query_df.to_excel(
                 writer,
-
-                sheet_name="Client Queries",
-
-                index=False
-            )
-
-            full_year_df.to_excel(
-
-                writer,
-
-                sheet_name="Combined MIS",
-
+                sheet_name=sheet_name,
                 index=False
             )
 
         output.seek(0)
 
-        return output
+    return output

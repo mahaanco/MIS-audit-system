@@ -282,31 +282,46 @@ def is_invalid_row(gl):
 
 def preprocess_mis(df):
 
+    # Clean dataframe
     df = clean_dataframe(df)
 
-    if df.empty:
+    # YOUR FILE'S REAL HEADER ROW
+    header_row = 3
 
-        raise Exception(
-            "Uploaded file is empty."
-        )
-
-    header_row = detect_header_row(df)
-
+    # Set headers
     df.columns = [
         str(col).strip()
-        for col in df.iloc[header_row].values
+        for col in df.iloc[header_row]
     ]
 
+    # Remove upper rows
     df = df[(header_row + 1):]
 
+    # Reset index
     df = df.reset_index(drop=True)
 
+    # Normalize column names
     df = normalize_columns(df)
 
-    ledger_col = detect_ledger_column(df)
+    # Ledger column
+    ledger_col = "gl name"
 
-    month_cols = detect_month_columns(df)
+    # Detect month columns
+    month_cols = []
 
+    for col in df.columns:
+
+        col_str = str(col).lower()
+
+        if (
+            "-" in col_str
+            or "/" in col_str
+            or "202" in col_str
+        ):
+
+            month_cols.append(col)
+
+    # Create processed dataframe
     processed = pd.DataFrame()
 
     processed["GL"] = (
@@ -315,20 +330,17 @@ def preprocess_mis(df):
         .str.strip()
     )
 
+    # Remove invalid rows
     processed = processed[
-        ~processed["GL"].apply(
-            is_invalid_row
-        )
+        ~processed["GL"].apply(is_invalid_row)
     ]
 
+    # Add month columns
     for month in month_cols:
 
         col_data = df[month]
 
-        if isinstance(
-            col_data,
-            pd.DataFrame
-        ):
+        if isinstance(col_data, pd.DataFrame):
 
             col_data = col_data.iloc[:, 0]
 
@@ -336,6 +348,16 @@ def preprocess_mis(df):
             col_data
         )
 
+    # Remove blanks
+    processed = processed[
+        processed["GL"].notna()
+    ]
+
+    processed = processed[
+        processed["GL"] != ""
+    ]
+
+    # Group duplicate GLs
     processed = (
         processed.groupby(
             "GL",

@@ -4,7 +4,7 @@ import numpy as np
 
 class VarianceAnalyzer:
 
-    def __init__(self, threshold=20):
+    def __init__(self, threshold=15):
 
         self.threshold = threshold
 
@@ -17,45 +17,57 @@ class VarianceAnalyzer:
 
         result = pd.DataFrame()
 
-        result["GL"] = df["GL"]
+        result["GL Name"] = df["GL"]
 
-        result[prev_month] = df[prev_month]
+        result["Previous Month"] = df[
+            prev_month
+        ]
 
-        result[curr_month] = df[curr_month]
+        result["Current Month"] = df[
+            curr_month
+        ]
 
-        result["Variance Amount"] = (
-            result[curr_month]
-            - result[prev_month]
+        result["Variance"] = (
+            result["Current Month"]
+            - result["Previous Month"]
         )
 
         result["Variance %"] = np.where(
             (
-                result[prev_month] == 0
+                result["Previous Month"] == 0
             ) &
             (
-                result[curr_month] == 0
+                result["Current Month"] == 0
             ),
             0,
 
             np.where(
-                result[prev_month] == 0,
+                result["Previous Month"] == 0,
                 np.nan,
 
                 (
                     (
-                        result[curr_month]
-                        - result[prev_month]
+                        result["Current Month"]
+                        - result["Previous Month"]
                     )
-                    / result[prev_month]
+                    / result["Previous Month"]
                 ) * 100
             )
         )
 
-        result["Variance Type"] = np.where(
+        result["Variance %"] = (
+            result["Variance %"]
+            .replace([np.inf, -np.inf], np.nan)
+            .fillna(0)
+            .round(2)
+        )
+
+        result["Status"] = np.where(
             result["Variance %"].abs()
             >= self.threshold,
 
             "High Variance",
+
             "Normal"
         )
 

@@ -17,19 +17,19 @@ from queries import (
 
 
 st.set_page_config(
-    page_title="MIS Variance Analysis System",
+    page_title="MIS Variance Analysis",
     layout="wide"
 )
 
 st.title(
-    "AI-Powered MIS Variance Analysis & Audit System"
+    "AI-Powered MIS Variance Analysis"
 )
 
 threshold = st.sidebar.slider(
-    "High Variance Threshold %",
-    min_value=5,
-    max_value=100,
-    value=20,
+    "Variance Threshold %",
+    5,
+    100,
+    15
 )
 
 uploaded_file = st.file_uploader(
@@ -48,30 +48,32 @@ if uploaded_file:
 
     try:
 
-        raw_df = read_file(uploaded_file)
-
-        processed_df, month_cols = preprocess_mis(raw_df)
-
-        st.success("MIS processed successfully.")
-
-        st.subheader("Processed MIS")
-
-        st.dataframe(
-            processed_df,
-            use_container_width=True
+        raw_df = read_file(
+            uploaded_file
         )
 
-        analyzer = VarianceAnalyzer(threshold)
+        processed_df, month_cols = (
+            preprocess_mis(raw_df)
+        )
 
-        for i in range(len(month_cols) - 1):
+        analyzer = VarianceAnalyzer(
+            threshold
+        )
+
+        for i in range(
+            len(month_cols) - 1
+        ):
 
             prev_month = month_cols[i]
+
             curr_month = month_cols[i + 1]
 
-            result_df = analyzer.calculate_variance(
-                processed_df,
-                prev_month,
-                curr_month
+            result_df = (
+                analyzer.calculate_variance(
+                    processed_df,
+                    prev_month,
+                    curr_month
+                )
             )
 
             st.divider()
@@ -86,7 +88,7 @@ if uploaded_file:
             )
 
             high_variance = result_df[
-                result_df["Variance Type"]
+                result_df["Status"]
                 == "High Variance"
             ]
 
@@ -96,9 +98,9 @@ if uploaded_file:
 
                 fig1 = px.bar(
                     high_variance.head(15),
-                    x="GL",
-                    y="Variance Amount",
-                    title="Top Variance Amount"
+                    x="GL Name",
+                    y="Variance",
+                    title="Top Variance Accounts"
                 )
 
                 st.plotly_chart(
@@ -110,7 +112,7 @@ if uploaded_file:
 
                 fig2 = px.bar(
                     high_variance.head(15),
-                    x="GL",
+                    x="GL Name",
                     y="Variance %",
                     title="Top Variance %"
                 )
@@ -120,12 +122,14 @@ if uploaded_file:
                     use_container_width=True
                 )
 
-            st.subheader("Client Queries")
+            st.subheader(
+                "AI Generated Queries"
+            )
 
-            queries_df = generate_client_queries(
-                result_df,
-                prev_month,
-                curr_month
+            queries_df = (
+                generate_client_queries(
+                    result_df
+                )
             )
 
             st.dataframe(

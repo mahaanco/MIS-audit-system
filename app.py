@@ -11,10 +11,6 @@ from variance_analysis import (
     VarianceAnalyzer
 )
 
-from trend_analysis import (
-    TrendAnalyzer
-)
-
 from queries import (
     QueryPrioritizer
 )
@@ -45,16 +41,6 @@ threshold = st.sidebar.slider(
     min_value=5,
     max_value=100,
     value=15
-)
-
-trend_period = st.sidebar.selectbox(
-    "Trend Analysis Period",
-    [
-        "3 Months",
-        "6 Months",
-        "12 Months",
-        "All Months"
-    ]
 )
 
 
@@ -127,7 +113,7 @@ if uploaded_file:
         )
 
         # =========================================
-        # SHOW MONTHS DETECTED
+        # SHOW DETECTED MONTHS
         # =========================================
 
         st.subheader(
@@ -137,7 +123,7 @@ if uploaded_file:
         st.write(month_cols)
 
         # =========================================
-        # SHOW PROCESSED MIS
+        # SHOW PROCESSED DATA
         # =========================================
 
         with st.expander(
@@ -157,93 +143,7 @@ if uploaded_file:
             threshold
         )
 
-        trend_analyzer = TrendAnalyzer()
-
         query_engine = QueryPrioritizer()
-
-        # =========================================
-        # TREND PERIOD LOGIC
-        # =========================================
-
-        if trend_period == "3 Months":
-
-            trend_months = (
-                month_cols[-3:]
-            )
-
-        elif trend_period == "6 Months":
-
-            trend_months = (
-                month_cols[-6:]
-            )
-
-        elif trend_period == "12 Months":
-
-            trend_months = (
-                month_cols[-12:]
-            )
-
-        else:
-
-            trend_months = month_cols
-
-        # =========================================
-        # TREND ANALYSIS
-        # =========================================
-
-        st.divider()
-
-        st.header(
-            "Trend Analysis"
-        )
-
-        st.write(
-            f"Trend Period Used: "
-            f"{', '.join(trend_months)}"
-        )
-
-        trend_df = (
-            trend_analyzer.calculate_trends(
-                processed_df,
-                trend_months
-            )
-        )
-
-        # Sort by volatility
-        trend_df = trend_df.sort_values(
-            by="Volatility %",
-            ascending=False
-        )
-
-        st.dataframe(
-            trend_df,
-            use_container_width=True
-        )
-
-        # =========================================
-        # TREND CHART
-        # =========================================
-
-        st.subheader(
-            "Top Trend Analysis"
-        )
-
-        trend_chart_data = (
-            trend_df.head(15)
-        )
-
-        fig_trend = px.bar(
-            trend_chart_data,
-            x="GL",
-            y="Trend %",
-            color="Risk Level",
-            title="Top Trend Analysis"
-        )
-
-        st.plotly_chart(
-            fig_trend,
-            use_container_width=True
-        )
 
         # =========================================
         # VARIANCE ANALYSIS
@@ -276,6 +176,15 @@ if uploaded_file:
             )
 
             # =========================================
+            # SORT HIGH VARIANCE FIRST
+            # =========================================
+
+            result_df = result_df.sort_values(
+                by="Variance %",
+                ascending=False
+            )
+
+            # =========================================
             # HEADER
             # =========================================
 
@@ -283,15 +192,6 @@ if uploaded_file:
 
             st.subheader(
                 f"{prev_month} vs {curr_month}"
-            )
-
-            # =========================================
-            # SORT HIGH VARIANCE FIRST
-            # =========================================
-
-            result_df = result_df.sort_values(
-                by="Variance %",
-                ascending=False
             )
 
             # =========================================
@@ -304,7 +204,7 @@ if uploaded_file:
             )
 
             # =========================================
-            # HIGH VARIANCE FILTER
+            # FILTER HIGH VARIANCE
             # =========================================
 
             high_variance = result_df[

@@ -1,235 +1,223 @@
 import pandas as pd
-import streamlit as st
-import zipfile
-import json
-import xml.etree.ElementTree as ET
-
+import numpy as np
+import re
 from io import BytesIO
 
-def detect_header_row(df):
 
-    for i in range(min(20, len(df))):
+LEDGER_KEYWORDS = [
+    "gl",
+    "ledger",
+    "particular",
+    "particulars",
+    "account",
+    "account name",
+    "ledger name",
+    "g/l",
+    "g/l account",
+]
 
-        row = (
-            df.iloc[i]
-            .astype(str)
-            .str.lower()
-        )
-
-        keywords = [
-
-            "gl name",
-            "particular",
-            "particulars",
-            "ledger",
-            "mapping",
-            "description"
-        ]
-
-        if any(
-            keyword in row.values
-            for keyword in keywords
-        ):
-            return i
-
-    return 0
+AMOUNT_KEYWORDS = [
+    "amount",
+    "amt",
+    "balance",
+    "value",
+    "closing",
+    "current",
+    "debit",
+    "credit",
+    "net",
+]
 
 
-def clean_columns(df):
+def read_file(uploaded_file):
+
+    filename = uploaded_file.name.lower()
+
+    try:
+
+        if filename.endswith(".xlsx"):
+            df = pd.read_excel(uploaded_file, engine="openpyxl")
+
+        elif filename.endswith(".xls"):
+            df = pd.read_excel(uploaded_file, engine="xlrd")
+
+        elif filename.endswith(".xlsb"):
+            df = pd.read_excel(uploaded_file, engine="pyxlsb")
+
+        elif filename.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+
+        elif filename.endswith(".txt"):
+            df = pd.read_csv(uploaded_file, sep=None, engine="python")
+
+        elif filename.endswith(".ods"):
+            df = pd.read_excel(uploaded_file, engine="odf")
+
+        else:
+            raise ValueError("Unsupported file format.")
+
+        return df
+
+    except Exception as e:
+        raise Exception(f"Error reading file {uploaded_file.name}: {e}")
+
+
+def detect_header_row(df, max_scan_rows=15):
+
+    best_row = 0
+    best_score = 0
+
+    for i in range(min(max_scan_rows, len(df))):
+
+        row = df.iloc[i].astype(str).str.lower()
+
+        score = 0
+
+        for cell in row:
+            if any(keyword in cell for keyword in LEDGER_KEYWORDS):
+                score += 2
+
+            if any(keyword in cell for keyword in AMOUNT_KEYWORDS):
+                score += 2
+
+        if score > best_score:
+            best_score = score
+            best_row = i
+
+    return best_row
+
+
+def clean_dataframe(df):
+
+    df = df.copy()
+
+    df = df.dropna(how="all")
+
+    df = df.fillna("")
+
+    return df
+
+
+def normalize_columns(df):
 
     df.columns = (
-
-        df.columns
-        .astype(str)
+        df.columns.astype(str)
         .str.strip()
+        .str.lower()
+        .str.replace(r"\n", " ", regex=True)
     )
 
     return df
 
 
-def read_excel_dynamic(file):
+def detect_ledger_column(df):
 
-    raw_df = pd.read_excel(
-        file,
-        header=None
-    )
+    for col in df.columns:
 
-    header_row = detect_header_row(raw_df)
+        col_clean = str(col).lower()
 
-    df = pd.read_excel(
-        file,
-        header=header_row
-    )
+        if any(keyword in col_clean for keyword in LEDGER_KEYWORDS):
+            return col
 
-    return clean_columns(df)
+    text_ratio = {}
 
+    for col in df.columns:
 
-def read_csv_dynamic(file):
+        sample = df[col].astype(str).head(30)
 
-    raw_df = pd.read_csv(
-        file,
-        header=None
-    )
+        text_count = sample.apply(lambda x: any(c.isalpha() for c in x)).sum()
 
-    header_row = detect_header_row(raw_df)
+        text_ratio[col] = text_count
 
-    df = pd.read_csv(
-        file,
-        header=header_row
-    )
+    return max(text_ratio, key=text_ratio.get)
 
-    return clean_columns(df)
 
+def detect_amount_column(df):
 
-def read_txt_dynamic(file):
+    for col in df.columns:
 
-    df = pd.read_csv(
-        file,
-        sep=None,
-        engine="python"
-    )
+        col_clean = str(col).lower()
 
-    return clean_columns(df)
+        if any(keyword in col_clean for keyword in AMOUNT_KEYWORDS):
+            return col
 
+    numeric_scores = {}
 
-def read_json_dynamic(file):
+    for col in df.columns:
 
-    data = json.load(file)
-
-    df = pd.json_normalize(data)
-
-    return clean_columns(df)
-
-
-def read_xml_dynamic(file):
-
-    tree = ET.parse(file)
-
-    root = tree.getroot()
-
-    data = []
-
-    for child in root:
-
-        row = {}
-
-        for item in child:
-            row[item.tag] = item.text
-
-        data.append(row)
-
-    df = pd.DataFrame(data)
-
-    return clean_columns(df)
-
-
-def read_html_dynamic(file):
-
-    dfs = pd.read_html(file)
-
-    return clean_columns(dfs[0])
-
-
-def read_parquet_dynamic(file):
-
-    df = pd.read_parquet(file)
-
-    return clean_columns(df)
-
-
-def read_xlsb_dynamic(file):
-
-    df = pd.read_excel(
-        file,
-        engine="pyxlsb"
-    )
-
-    return clean_columns(df)
-
-
-def read_ods_dynamic(file):
-
-    df = pd.read_excel(
-        file,
-        engine="odf"
-    )
-
-    return clean_columns(df)
-
-
-def read_zip_dynamic(file):
-
-    with zipfile.ZipFile(file) as z:
-
-        first_file = z.namelist()[0]
-
-        with z.open(first_file) as f:
-
-            if first_file.endswith(".csv"):
-
-                df = pd.read_csv(f)
-
-            else:
-
-                df = pd.read_excel(f)
-
-    return clean_columns(df)
-
-
-def read_mis_file(uploaded_file):
-
-    file_name = (
-        uploaded_file.name
-        .lower()
-    )
-
-    try:
-
-        if file_name.endswith(".xlsx"):
-            return read_excel_dynamic(uploaded_file)
-
-        elif file_name.endswith(".xls"):
-            return read_excel_dynamic(uploaded_file)
-
-        elif file_name.endswith(".xlsb"):
-            return read_xlsb_dynamic(uploaded_file)
-
-        elif file_name.endswith(".csv"):
-            return read_csv_dynamic(uploaded_file)
-
-        elif file_name.endswith(".txt"):
-            return read_txt_dynamic(uploaded_file)
-
-        elif file_name.endswith(".json"):
-            return read_json_dynamic(uploaded_file)
-
-        elif file_name.endswith(".xml"):
-            return read_xml_dynamic(uploaded_file)
-
-        elif file_name.endswith(".html"):
-            return read_html_dynamic(uploaded_file)
-
-        elif file_name.endswith(".parquet"):
-            return read_parquet_dynamic(uploaded_file)
-
-        elif file_name.endswith(".ods"):
-            return read_ods_dynamic(uploaded_file)
-
-        elif file_name.endswith(".zip"):
-            return read_zip_dynamic(uploaded_file)
-
-        else:
-
-            st.error(
-                f"Unsupported File Type: {file_name}"
-            )
-
-            return pd.DataFrame()
-
-    except Exception as e:
-
-        st.error(
-            f"Error Reading File: {e}"
+        converted = pd.to_numeric(
+            df[col].astype(str).str.replace(",", ""),
+            errors="coerce",
         )
 
-        return pd.DataFrame()
+        numeric_scores[col] = converted.notna().sum()
+
+    return max(numeric_scores, key=numeric_scores.get)
+
+
+def clean_amount_column(series):
+
+    return pd.to_numeric(
+        series.astype(str)
+        .str.replace(",", "")
+        .str.replace("(", "-")
+        .str.replace(")", "")
+        .str.strip(),
+        errors="coerce"
+    ).fillna(0)
+
+
+def is_invalid_row(gl):
+
+    gl = str(gl).strip().lower()
+
+    if gl == "":
+        return True
+
+    invalid_keywords = [
+        "total",
+        "subtotal",
+        "grand total",
+        "entry to be passed",
+        "narration",
+    ]
+
+    if any(word in gl for word in invalid_keywords):
+        return True
+
+    if gl.isnumeric():
+        return True
+
+    if len(gl) <= 2:
+        return True
+
+    return False
+
+
+def preprocess_mis(df):
+
+    df = clean_dataframe(df)
+
+    header_row = detect_header_row(df)
+
+    df.columns = df.iloc[header_row]
+
+    df = df[(header_row + 1):]
+
+    df = normalize_columns(df)
+
+    ledger_col = detect_ledger_column(df)
+
+    amount_col = detect_amount_column(df)
+
+    processed = pd.DataFrame()
+
+    processed["GL"] = df[ledger_col].astype(str).str.strip()
+
+    processed["Amount"] = clean_amount_column(df[amount_col])
+
+    processed = processed[~processed["GL"].apply(is_invalid_row)]
+
+    processed = processed.groupby("GL", as_index=False)["Amount"].sum()
+
+    return processed

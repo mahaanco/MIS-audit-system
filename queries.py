@@ -1,33 +1,48 @@
 import pandas as pd
+import numpy as np
 
-class Queries:
 
-    def generate(
-        self,
-        variance_df
-    ):
+def generate_client_queries(df, prev_month, curr_month):
 
-        high_variance = variance_df[
+    queries = []
 
-            variance_df["Status"]
-            == "High Variance"
-        ]
+    for _, row in df.iterrows():
 
-        queries = []
+        prev_value = row[prev_month]
+        curr_value = row[curr_month]
 
-        for _, row in high_variance.iterrows():
+        if (
+            prev_value == 0 and curr_value > 0
+        ):
+            continue
 
-            query = (
+        if (
+            prev_value == 0 and curr_value == 0
+        ):
+            continue
 
-                f"Why did "
-                f"'{row['GL Name']}' "
-                f"show yearly fluctuation of "
-                f"{round(row['Variance %'],2)}% ?"
+        if pd.isna(row["Variance %"]):
+            continue
+
+        if abs(row["Variance %"]) < 20:
+            continue
+
+        if curr_value > prev_value:
+
+            q = (
+                f"Why did {row['GL']} increase by "
+                f"{round(row['Variance %'], 2)}% "
+                f"from {prev_month} to {curr_month}?"
             )
 
-            queries.append(query)
+        else:
 
-        return pd.DataFrame({
+            q = (
+                f"Why did {row['GL']} decrease by "
+                f"{abs(round(row['Variance %'], 2))}% "
+                f"from {prev_month} to {curr_month}?"
+            )
 
-            "Possible Client Query": queries
-        })
+        queries.append(q)
+
+    return pd.DataFrame({"Client Query": queries})

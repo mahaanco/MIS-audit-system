@@ -134,6 +134,8 @@ def normalize_columns(df):
 
     cleaned_cols = []
 
+    seen = {}
+
     for col in df.columns:
 
         col = str(col)
@@ -143,6 +145,17 @@ def normalize_columns(df):
         col = col.replace("\n", " ")
 
         col = re.sub(r"\s+", " ", col)
+
+        # Handle duplicate column names
+        if col in seen:
+
+            seen[col] += 1
+
+            col = f"{col}_{seen[col]}"
+
+        else:
+
+            seen[col] = 0
 
         cleaned_cols.append(col)
 
@@ -262,9 +275,16 @@ def preprocess_mis(df):
 
     for month in month_cols:
 
-        processed[month] = clean_amount_column(
-            df[month]
-        )
+    col_data = df[month]
+
+    # If duplicate columns return DataFrame
+    if isinstance(col_data, pd.DataFrame):
+
+        col_data = col_data.iloc[:, 0]
+
+    processed[month] = clean_amount_column(
+        col_data
+    )
 
     processed = (
         processed.groupby("GL", as_index=False)

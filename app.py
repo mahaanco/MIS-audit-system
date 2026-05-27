@@ -21,12 +21,12 @@ from queries import (
 # =========================================
 
 st.set_page_config(
-    page_title="AI MIS Audit System",
+    page_title="MIS Variance analysis",
     layout="wide"
 )
 
 st.title(
-    "AI-Powered MIS Variance Analysis & Audit System"
+    "Powered MIS Variance Analysis"
 )
 
 
@@ -102,7 +102,10 @@ if uploaded_file:
         # SORT MONTHS
         # =========================================
 
-        month_cols = sorted(month_cols)
+        month_cols = sorted(  
+            month_cols,            
+            reverse=True            
+            )
 
         # =========================================
         # PERIOD SELECTION

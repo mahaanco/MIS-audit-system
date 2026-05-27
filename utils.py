@@ -311,13 +311,27 @@ def preprocess_mis(df):
 
     for col in df.columns:
 
-        col_str = str(col).lower()
+    col_str = str(col).lower()
 
-        if (
-            "-" in col_str
-            or "/" in col_str
-            or "202" in col_str
-        ):
+    # Ignore timestamp/time columns
+    if ":" in col_str:
+        continue
+
+    # Detect only month/date columns
+    if (
+        "-" in col_str
+        or "/" in col_str
+        or "202" in col_str
+    ):
+
+        # Remove time portion if exists
+        clean_col = (
+            str(col)
+            .split(" ")[0]
+            .strip()
+        )
+
+        month_cols.append(clean_col)
 
             month_cols.append(col)
 

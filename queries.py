@@ -1,46 +1,170 @@
 import pandas as pd
 
 
-def generate_client_queries(df):
+class QueryPrioritizer:
 
-    queries = []
+    def __init__(self):
 
-    high_variance = df[
-        df["Status"] == "High Variance"
-    ]
+        pass
 
-    for _, row in high_variance.iterrows():
+    def generate_queries(
+        self,
+        variance_df
+    ):
 
-        if (
-            row["Previous Month"] == 0
-            and row["Current Month"] > 0
-        ):
-            continue
+        queries = []
 
-        if (
-            row["Previous Month"] == 0
-            and row["Current Month"] == 0
-        ):
-            continue
+        high_variance = variance_df[
+            variance_df["Status"]
+            == "High Variance"
+        ]
 
-        if row["Variance"] > 0:
+        for _, row in high_variance.iterrows():
 
-            query = (
-                f"Why did {row['GL Name']} "
-                f"increase by "
-                f"{row['Variance %']}%?"
+            previous = row["Previous Month"]
+
+            current = row["Current Month"]
+
+            variance = row["Variance"]
+
+            variance_pct = row["Variance %"]
+
+            gl = row["GL Name"]
+
+            # Ignore new GLs
+            if (
+                previous == 0
+                and current > 0
+            ):
+
+                continue
+
+            # Ignore zero rows
+            if (
+                previous == 0
+                and current == 0
+            ):
+
+                continue
+
+            # Risk priority logic
+            if abs(variance_pct) > 200:
+
+                priority = "Critical"
+
+            elif abs(variance_pct) > 100:
+
+                priority = "High"
+
+            elif abs(variance_pct) > 50:
+
+                priority = "Medium"
+
+            else:
+
+                priority = "Low"
+
+            # AI query generation
+            if variance > 0:
+
+                query = (
+                    f"Why did "
+                    f"{gl} increase by "
+                    f"{round(variance_pct, 2)}%?"
+                )
+
+            else:
+
+                query = (
+                    f"Why did "
+                    f"{gl} decrease by "
+                    f"{abs(round(variance_pct, 2))}%?"
+                )
+
+            # Risk tagging
+            risk_flags = []
+
+            if "cash" in gl.lower():
+
+                risk_flags.append(
+                    "Cash Movement"
+                )
+
+            if "suspense" in gl.lower():
+
+                risk_flags.append(
+                    "Suspense Account"
+                )
+
+            if "round" in gl.lower():
+
+                risk_flags.append(
+                    "Round Entry"
+                )
+
+            if abs(variance) > 1000000:
+
+                risk_flags.append(
+                    "Material Variance"
+                )
+
+            queries.append({
+
+                "Priority": priority,
+
+                "GL Name": gl,
+
+                "Variance": round(
+                    variance,
+                    2
+                ),
+
+                "Variance %": round(
+                    variance_pct,
+                    2
+                ),
+
+                "Risk Flags": ", ".join(
+                    risk_flags
+                ),
+
+                "AI Query": query
+            })
+
+        queries_df = pd.DataFrame(
+            queries
+        )
+
+        priority_order = {
+            "Critical": 1,
+            "High": 2,
+            "Medium": 3,
+            "Low": 4
+        }
+
+        if not queries_df.empty:
+
+            queries_df[
+                "Priority Order"
+            ] = queries_df[
+                "Priority"
+            ].map(priority_order)
+
+            queries_df = queries_df.sort_values(
+                by=[
+                    "Priority Order",
+                    "Variance %"
+                ],
+                ascending=[
+                    True,
+                    False
+                ]
             )
 
-        else:
-
-            query = (
-                f"Why did {row['GL Name']} "
-                f"decrease by "
-                f"{abs(row['Variance %'])}%?"
+            queries_df = queries_df.drop(
+                columns=[
+                    "Priority Order"
+                ]
             )
 
-        queries.append(query)
-
-    return pd.DataFrame({
-        "AI Queries": queries
-    })
+        return queries_df

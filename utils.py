@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import re
-from io import BytesIO
 
 
 LEDGER_KEYWORDS = [
@@ -13,19 +12,22 @@ LEDGER_KEYWORDS = [
     "account name",
     "ledger name",
     "g/l",
-    "g/l account",
 ]
 
-AMOUNT_KEYWORDS = [
-    "amount",
-    "amt",
-    "balance",
-    "value",
-    "closing",
-    "current",
-    "debit",
-    "credit",
-    "net",
+MONTH_KEYWORDS = [
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "may",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "oct",
+    "nov",
+    "dec",
+    "202",
 ]
 
 
@@ -36,22 +38,46 @@ def read_file(uploaded_file):
     try:
 
         if filename.endswith(".xlsx"):
-            df = pd.read_excel(uploaded_file, engine="openpyxl")
+            df = pd.read_excel(
+                uploaded_file,
+                header=None,
+                engine="openpyxl"
+            )
 
         elif filename.endswith(".xls"):
-            df = pd.read_excel(uploaded_file, engine="xlrd")
+            df = pd.read_excel(
+                uploaded_file,
+                header=None,
+                engine="xlrd"
+            )
 
         elif filename.endswith(".xlsb"):
-            df = pd.read_excel(uploaded_file, engine="pyxlsb")
+            df = pd.read_excel(
+                uploaded_file,
+                header=None,
+                engine="pyxlsb"
+            )
 
         elif filename.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
+            df = pd.read_csv(
+                uploaded_file,
+                header=None
+            )
 
         elif filename.endswith(".txt"):
-            df = pd.read_csv(uploaded_file, sep=None, engine="python")
+            df = pd.read_csv(
+                uploaded_file,
+                sep=None,
+                engine="python",
+                header=None
+            )
 
         elif filename.endswith(".ods"):
-            df = pd.read_excel(uploaded_file, engine="odf")
+            df = pd.read_excel(
+                uploaded_file,
+                header=None,
+                engine="odf"
+            )
 
         else:
             raise ValueError("Unsupported file format.")
@@ -59,7 +85,20 @@ def read_file(uploaded_file):
         return df
 
     except Exception as e:
-        raise Exception(f"Error reading file {uploaded_file.name}: {e}")
+        raise Exception(f"Error reading file: {e}")
+
+
+def clean_dataframe(df):
+
+    df = df.copy()
+
+    df = df.dropna(how="all")
+
+    df = df.dropna(axis=1, how="all")
+
+    df = df.fillna("")
+
+    return df
 
 
 def detect_header_row(df, max_scan_rows=15):
@@ -77,33 +116,18 @@ def detect_header_row(df, max_scan_rows=15):
 
             cell = str(cell).lower()
 
-            if any(keyword in cell for keyword in LEDGER_KEYWORDS):
-                score += 2
+            if any(k in cell for k in LEDGER_KEYWORDS):
+                score += 5
 
-            if any(keyword in cell for keyword in AMOUNT_KEYWORDS):
+            if any(k in cell for k in MONTH_KEYWORDS):
                 score += 2
 
         if score > best_score:
+
             best_score = score
             best_row = i
 
     return best_row
-
-
-def clean_dataframe(df):
-
-    df = df.copy()
-
-    # Remove fully blank rows
-    df = df.dropna(how="all")
-
-    # Remove fully blank columns
-    df = df.dropna(axis=1, how="all")
-
-    # Fill blanks
-    df = df.fillna("")
-
-    return df
 
 
 def normalize_columns(df):
@@ -129,73 +153,36 @@ def normalize_columns(df):
 
 def detect_ledger_column(df):
 
-    # First priority → keyword match
     for col in df.columns:
 
         col_clean = str(col).lower()
 
-        if any(keyword in col_clean for keyword in LEDGER_KEYWORDS):
+        if any(k in col_clean for k in LEDGER_KEYWORDS):
             return col
 
-    # Second priority → text-heavy column
-    text_ratio = {}
+    raise Exception("Ledger column not detected.")
+
+
+def detect_month_columns(df):
+
+    month_cols = []
 
     for col in df.columns:
 
-        try:
+        col_str = str(col).lower()
 
-            sample = df[col].astype(str).head(30)
+        if (
+            any(m in col_str for m in MONTH_KEYWORDS)
+            or "-" in col_str
+            or "/" in col_str
+        ):
 
-            text_count = sample.apply(
-                lambda x: any(c.isalpha() for c in str(x))
-            ).sum()
+            month_cols.append(col)
 
-            text_ratio[col] = text_count
+    if not month_cols:
+        raise Exception("Month columns not detected.")
 
-        except:
-            continue
-
-    if not text_ratio:
-        raise Exception("Ledger column could not be detected.")
-
-    return max(text_ratio, key=text_ratio.get)
-
-
-def detect_amount_column(df):
-
-    # First priority → keyword match
-    for col in df.columns:
-
-        col_clean = str(col).lower()
-
-        if any(keyword in col_clean for keyword in AMOUNT_KEYWORDS):
-            return col
-
-    # Second priority → most numeric column
-    numeric_scores = {}
-
-    for col in df.columns:
-
-        try:
-
-            converted = pd.to_numeric(
-                df[col]
-                .astype(str)
-                .str.replace(",", "", regex=False)
-                .str.replace("(", "-", regex=False)
-                .str.replace(")", "", regex=False),
-                errors="coerce",
-            )
-
-            numeric_scores[col] = converted.notna().sum()
-
-        except:
-            continue
-
-    if not numeric_scores:
-        raise Exception("Amount column could not be detected.")
-
-    return max(numeric_scores, key=numeric_scores.get)
+    return month_cols
 
 
 def clean_amount_column(series):
@@ -228,11 +215,9 @@ def is_invalid_row(gl):
     if any(word in gl for word in invalid_keywords):
         return True
 
-    # Numeric-only rows
     if re.fullmatch(r"[\d\.\,\-]+", gl):
         return True
 
-    # Very short junk rows
     if len(gl) <= 2:
         return True
 
@@ -241,39 +226,28 @@ def is_invalid_row(gl):
 
 def preprocess_mis(df):
 
-    # Initial cleaning
     df = clean_dataframe(df)
 
     if df.empty:
         raise Exception("Uploaded file is empty.")
 
-    # Detect header row
     header_row = detect_header_row(df)
 
-    # Assign headers safely
     df.columns = [
         str(col).strip()
         for col in df.iloc[header_row].values
     ]
 
-    # Remove header rows
     df = df[(header_row + 1):]
 
-    # Reset index
     df = df.reset_index(drop=True)
 
-    # Normalize columns
     df = normalize_columns(df)
 
-    if df.empty:
-        raise Exception("No usable data found after preprocessing.")
-
-    # Detect columns
     ledger_col = detect_ledger_column(df)
 
-    amount_col = detect_amount_column(df)
+    month_cols = detect_month_columns(df)
 
-    # Create processed dataframe
     processed = pd.DataFrame()
 
     processed["GL"] = (
@@ -282,22 +256,19 @@ def preprocess_mis(df):
         .str.strip()
     )
 
-    processed["Amount"] = clean_amount_column(
-        df[amount_col]
-    )
-
-    # Remove invalid rows
     processed = processed[
         ~processed["GL"].apply(is_invalid_row)
     ]
 
-    if processed.empty:
-        raise Exception("No valid ledger rows found.")
+    for month in month_cols:
 
-    # Group duplicate GLs
+        processed[month] = clean_amount_column(
+            df[month]
+        )
+
     processed = (
-        processed.groupby("GL", as_index=False)["Amount"]
-        .sum()
+        processed.groupby("GL", as_index=False)
+        .sum(numeric_only=True)
     )
 
-    return processed
+    return processed, month_cols

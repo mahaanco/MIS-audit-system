@@ -102,10 +102,14 @@ if uploaded_file:
         # SORT MONTHS
         # =========================================
 
-        month_cols = sorted(  
-            month_cols,            
-            reverse=True            
-            )
+        month_cols = sorted(
+            month_cols,
+            key=lambda x: pd.to_datetime(
+                x,
+               format="%b-%y"
+           ),
+           reverse=True
+       )
 
         # =========================================
         # PERIOD SELECTION

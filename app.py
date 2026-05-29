@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -21,20 +22,22 @@ from queries import (
 # =========================================
 
 st.set_page_config(
-    page_title="MIS Variance analysis",
+    page_title="MIS Variance Analysis",
     layout="wide"
 )
 
 st.title(
-    "Powered MIS Variance Analysis"
+    "AI-Powered MIS Variance Analysis & Audit System"
 )
 
 
 # =========================================
-# SIDEBAR CONFIGURATION
+# SIDEBAR
 # =========================================
 
-st.sidebar.header("Configuration")
+st.sidebar.header(
+    "Configuration"
+)
 
 threshold = st.sidebar.slider(
     "Variance Threshold %",
@@ -62,73 +65,60 @@ uploaded_file = st.file_uploader(
 
 
 # =========================================
-# MAIN PROCESSING
+# MAIN LOGIC
 # =========================================
 
 if uploaded_file:
 
     try:
 
-        # =========================================
-        # READ FILE
-        # =========================================
-
         raw_df = read_file(
             uploaded_file
         )
-
-        # =========================================
-        # PREPROCESS MIS
-        # =========================================
 
         processed_df, month_cols = (
             preprocess_mis(raw_df)
         )
 
-        # =========================================
-        # VALIDATION
-        # =========================================
-
         if len(month_cols) < 2:
 
             st.error(
-                "At least 2 months are required "
-                "for variance analysis."
+                "Minimum 2 months required."
             )
 
             st.stop()
 
         # =========================================
-        # SORT MONTHS
+        # SORT MONTHS (LATEST FIRST)
         # =========================================
 
         month_cols = sorted(
             month_cols,
             key=lambda x: pd.to_datetime(
                 x,
-               format="%b-%y"
-           ),
-           reverse=True
-       )
+                format="%b-%y"
+            ),
+            reverse=True
+        )
 
         # =========================================
         # PERIOD SELECTION
         # =========================================
 
         st.sidebar.subheader(
-            "Variance Analysis Period"
+            "Analysis Period"
         )
 
         start_month = st.sidebar.selectbox(
-            "Select Start Month",
+            "From Month",
             month_cols,
             index=0
         )
 
         end_month = st.sidebar.selectbox(
-            "Select End Month",
+            "To Month",
             month_cols,
-            index=len(month_cols) - 1
+            index=len(month_cols)-1
         )
 
         start_index = month_cols.index(
@@ -139,44 +129,39 @@ if uploaded_file:
             end_month
         )
 
-        # Validation
-        if start_index >= end_index:
+        if start_index > end_index:
 
             st.error(
-                "End month must be after start month."
+                "Invalid period selected."
             )
 
             st.stop()
 
-        # Selected months
         selected_months = month_cols[
             start_index:end_index + 1
         ]
 
         # =========================================
-        # SUCCESS MESSAGE
+        # SUCCESS
         # =========================================
 
         st.success(
-            "MIS File Processed Successfully"
+            "MIS Processed Successfully"
+        )
+
+        st.info(
+            f"Analysis Period: "
+            f"{selected_months[0]} "
+            f"to "
+            f"{selected_months[-1]}"
         )
 
         # =========================================
-        # SHOW DETECTED MONTHS
-        # =========================================
-
-        st.subheader(
-            "Selected Analysis Period"
-        )
-
-        st.write(selected_months)
-
-        # =========================================
-        # SHOW PROCESSED MIS
+        # VIEW DATA
         # =========================================
 
         with st.expander(
-            "View Processed MIS Data"
+            "View Processed MIS"
         ):
 
             st.dataframe(
@@ -184,21 +169,17 @@ if uploaded_file:
                 use_container_width=True
             )
 
-        # =========================================
-        # INITIALIZE ENGINES
-        # =========================================
-
         analyzer = VarianceAnalyzer(
             threshold
         )
 
-        query_engine = QueryPrioritizer()
+        query_engine = (
+            QueryPrioritizer()
+        )
 
         # =========================================
         # VARIANCE ANALYSIS
         # =========================================
-
-        st.divider()
 
         st.header(
             "Rolling Variance Analysis"
@@ -208,62 +189,51 @@ if uploaded_file:
             len(selected_months) - 1
         ):
 
-            prev_month = selected_months[i]
+            current_month = (
+                selected_months[i]
+            )
 
-            curr_month = selected_months[i + 1]
-
-            # =========================================
-            # CALCULATE VARIANCE
-            # =========================================
+            previous_month = (
+                selected_months[i + 1]
+            )
 
             result_df = (
                 analyzer.calculate_variance(
                     processed_df,
-                    prev_month,
-                    curr_month
+                    previous_month,
+                    current_month
                 )
             )
 
-            # =========================================
-            # SORT HIGH VARIANCE FIRST
-            # =========================================
-
-            result_df = result_df.sort_values(
-                by="Variance %",
-                ascending=False
+            result_df = (
+                result_df.sort_values(
+                    by="Variance %",
+                    ascending=False
+                )
             )
-
-            # =========================================
-            # HEADER
-            # =========================================
 
             st.divider()
 
             st.subheader(
-                f"{prev_month} vs {curr_month}"
+                f"{current_month} vs "
+                f"{previous_month}"
             )
-
-            # =========================================
-            # SHOW VARIANCE TABLE
-            # =========================================
 
             st.dataframe(
                 result_df,
                 use_container_width=True
             )
 
-            # =========================================
-            # FILTER HIGH VARIANCE
-            # =========================================
+            # =====================================
+            # HIGH VARIANCE
+            # =====================================
 
-            high_variance = result_df[
-                result_df["Status"]
-                == "High Variance"
-            ]
-
-            # =========================================
-            # CHARTS
-            # =========================================
+            high_variance = (
+                result_df[
+                    result_df["Status"]
+                    == "High Variance"
+                ]
+            )
 
             col1, col2 = st.columns(2)
 
@@ -273,7 +243,6 @@ if uploaded_file:
                     high_variance.head(15),
                     x="GL Name",
                     y="Variance",
-                    color="Status",
                     title="Top Variance Accounts"
                 )
 
@@ -288,7 +257,6 @@ if uploaded_file:
                     high_variance.head(15),
                     x="GL Name",
                     y="Variance %",
-                    color="Status",
                     title="Top Variance %"
                 )
 
@@ -297,9 +265,9 @@ if uploaded_file:
                     use_container_width=True
                 )
 
-            # =========================================
+            # =====================================
             # AI QUERY PRIORITIZATION
-            # =========================================
+            # =====================================
 
             st.subheader(
                 "AI Query Prioritization"
@@ -321,3 +289,4 @@ if uploaded_file:
         st.error(
             f"Error: {str(e)}"
         )
+```

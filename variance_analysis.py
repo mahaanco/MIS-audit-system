@@ -1,10 +1,14 @@
+
 import pandas as pd
 import numpy as np
 
 
 class VarianceAnalyzer:
 
-    def __init__(self, threshold=15):
+    def __init__(
+        self,
+        threshold=15
+    ):
 
         self.threshold = threshold
 
@@ -19,51 +23,80 @@ class VarianceAnalyzer:
 
         result["GL Name"] = df["GL"]
 
-        result["Previous Month"] = df[
+        # Dynamic month names
+        result[prev_month] = df[
             prev_month
         ]
 
-        result["Current Month"] = df[
+        result[curr_month] = df[
             curr_month
         ]
 
+        # Variance Amount
         result["Variance"] = (
-            result["Current Month"]
-            - result["Previous Month"]
+
+            result[curr_month]
+
+            - result[prev_month]
         )
 
+        # Variance %
         result["Variance %"] = np.where(
+
             (
-                result["Previous Month"] == 0
-            ) &
+                result[prev_month] == 0
+            )
+
+            &
+
             (
-                result["Current Month"] == 0
+                result[curr_month] == 0
             ),
+
             0,
 
             np.where(
-                result["Previous Month"] == 0,
+
+                result[prev_month] == 0,
+
                 np.nan,
 
                 (
+
                     (
-                        result["Current Month"]
-                        - result["Previous Month"]
+                        result[curr_month]
+
+                        - result[prev_month]
                     )
-                    / result["Previous Month"]
+
+                    /
+
+                    result[prev_month]
+
                 ) * 100
             )
         )
 
         result["Variance %"] = (
+
             result["Variance %"]
-            .replace([np.inf, -np.inf], np.nan)
+
+            .replace(
+                [np.inf, -np.inf],
+                np.nan
+            )
+
             .fillna(0)
+
             .round(2)
         )
 
         result["Status"] = np.where(
-            result["Variance %"].abs()
+
+            result["Variance %"]
+
+            .abs()
+
             >= self.threshold,
 
             "High Variance",
@@ -71,4 +104,13 @@ class VarianceAnalyzer:
             "Normal"
         )
 
+        # Sort biggest movements first
+        result = result.sort_values(
+
+            by="Variance %",
+
+            ascending=False
+        )
+
         return result
+

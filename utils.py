@@ -205,122 +205,141 @@ def detect_ledger_column(df):
     )
 
 
+
 def detect_month_and_drcr_columns(df):
+
+    import re
 
     month_data = {}
 
     for col in df.columns:
 
-        col_str = (
-            str(col)
-            .strip()
+        col_str = str(col).strip()
+
+        # =====================================
+        # DATE FORMAT COLUMNS
+        # Examples:
+        # 31-04-2026
+        # 2026-03-31
+        # 30/11/2025
+        # =====================================
+
+        date_match = re.search(
+            r"(\d{2})[-/](\d{2})[-/](\d{4})",
+            col_str
         )
 
-        try:
+        reverse_date_match = re.search(
+            r"(\d{4})[-/](\d{2})[-/](\d{2})",
+            col_str
+        )
 
-            dt = pd.to_datetime(
-                col_str,
-                errors="raise"
-            )
+        if date_match:
+
+            day = int(date_match.group(1))
+            month = int(date_match.group(2))
+            year = int(date_match.group(3))
 
             # Ignore Month Change columns
-            if dt.day == 1:
-
+            if day == 1:
                 continue
 
             month_name = (
-                dt.strftime(
-                    "%b-%y"
+                pd.Timestamp(
+                    year=year,
+                    month=month,
+                    day=1
                 )
+                .strftime("%b-%y")
             )
 
-            month_data[
-                month_name
-            ] = {
+            month_data[month_name] = {
                 "amount": col
             }
 
-        except Exception:
+            continue
 
-            col_lower = (
-                col_str.lower()
+        elif reverse_date_match:
+
+            year = int(
+                reverse_date_match.group(1)
             )
 
-            # Debit Column
-            if (
-                "debit"
-                in col_lower
-                or col_lower.endswith(
-                    "dr"
+            month = int(
+                reverse_date_match.group(2)
+            )
+
+            day = int(
+                reverse_date_match.group(3)
+            )
+
+            # Ignore Month Change columns
+            if day == 1:
+                continue
+
+            month_name = (
+                pd.Timestamp(
+                    year=year,
+                    month=month,
+                    day=1
                 )
-            ):
+                .strftime("%b-%y")
+            )
 
-                month_name = (
-                    col_lower
-                    .replace(
-                        "debit",
-                        ""
-                    )
-                    .replace(
-                        "dr",
-                        ""
-                    )
-                    .strip()
-                )
+            month_data[month_name] = {
+                "amount": col
+            }
 
-                if (
-                    month_name
-                    not in month_data
-                ):
+            continue
 
-                    month_data[
-                        month_name
-                    ] = {}
+        # =====================================
+        # DR / CR FORMAT
+        # =====================================
 
-                month_data[
-                    month_name
-                ][
-                    "debit"
-                ] = col
+        col_lower = col_str.lower()
 
-            # Credit Column
-            elif (
-                "credit"
-                in col_lower
-                or col_lower.endswith(
-                    "cr"
-                )
-            ):
+        if (
+            "debit" in col_lower
+            or col_lower.endswith("dr")
+        ):
 
-                month_name = (
-                    col_lower
-                    .replace(
-                        "credit",
-                        ""
-                    )
-                    .replace(
-                        "cr",
-                        ""
-                    )
-                    .strip()
-                )
+            month_name = (
+                col_lower
+                .replace("debit", "")
+                .replace("dr", "")
+                .strip()
+            )
 
-                if (
-                    month_name
-                    not in month_data
-                ):
+            if month_name not in month_data:
 
-                    month_data[
-                        month_name
-                    ] = {}
+                month_data[month_name] = {}
 
-                month_data[
-                    month_name
-                ][
-                    "credit"
-                ] = col
+            month_data[
+                month_name
+            ]["debit"] = col
+
+        elif (
+            "credit" in col_lower
+            or col_lower.endswith("cr")
+        ):
+
+            month_name = (
+                col_lower
+                .replace("credit", "")
+                .replace("cr", "")
+                .strip()
+            )
+
+            if month_name not in month_data:
+
+                month_data[month_name] = {}
+
+            month_data[
+                month_name
+            ]["credit"] = col
 
     return month_data
+
 
 
 def preprocess_mis(df):

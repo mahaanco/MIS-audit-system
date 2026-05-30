@@ -1,4 +1,4 @@
-```python
+
 import pandas as pd
 from io import BytesIO
 
@@ -196,4 +196,4 @@ def generate_excel_report(
         output.seek(0)
 
     return output
-```
+
